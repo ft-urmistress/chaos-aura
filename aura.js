@@ -34,11 +34,11 @@
         }
     }
 
-    function sendRoomEmote(text) {
+    function sendRoomAction(text) {
         if (typeof ServerSend === "function") {
             ServerSend("ChatRoomChat", {
                 Content: text,
-                Type: "Emote"
+                Type: "Action"
             });
         }
     }
@@ -138,7 +138,7 @@
         const attackerName = attacker ? getNicknameSafe(attacker) : `Player ${attackerMemberNumber ?? "Unknown"}`;
         const playerName = getNicknameSafe(Player);
 
-        sendRoomEmote(`${attackerName} tried to touch ${playerName}, but ${playerName} was protected by the power of void`);
+        sendRoomAction(`${attackerName} tried to touch ${playerName}, but ${playerName} was protected by the power of void`);
 
         const retriableItems = addedItems.filter((item) => item.Group !== "ItemHandheld");
         const canRetribute =
@@ -149,7 +149,7 @@
             (typeof ServerChatRoomGetAllowItem !== "function" || ServerChatRoomGetAllowItem(Player, attacker));
 
         if (canRetribute && typeof ServerAppearanceBundle === "function") {
-            sendRoomEmote(`Retribution: Used restraints are returned to ${attackerName}`);
+            sendRoomAction(`Retribution: Used restraints are returned to ${attackerName}`);
             ServerSend("ChatRoomCharacterUpdate", {
                 ID: attacker.OnlineID ?? attacker.AccountName?.replace("Online-", ""),
                 ActivePose: attacker.ActivePose,
@@ -266,7 +266,7 @@
         const mod = bcModSDK.registerMod({
             name: "ChaosAuraStandalone",
             fullName: "Chaos Aura Standalone",
-            version: "1.0.4"
+            version: "1.0.5"
         });
 
         mod.hookFunction("ChatRoomSyncItem", 0, (args, next) => {
@@ -354,6 +354,6 @@
 
     window.__chaosAuraConfig = config;
     window.__chaosAuraSnapshot = snapshotCurrent;
-    console.log("[ChaosAura] Standalone v1.0.4 loaded.");
+    console.log("[ChaosAura] Standalone v1.0.5 loaded.");
     sendLocal(getCommandSummary());
 })();
