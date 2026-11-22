@@ -38,7 +38,8 @@
         if (typeof ServerSend === "function") {
             ServerSend("ChatRoomChat", {
                 Content: text,
-                Type: "Action"
+                Type: "Action",
+                Dictionary: [{ Text: text }]
             });
         }
     }
@@ -266,7 +267,7 @@
         const mod = bcModSDK.registerMod({
             name: "ChaosAuraStandalone",
             fullName: "Chaos Aura Standalone",
-            version: "1.0.5"
+            version: "1.0.6"
         });
 
         mod.hookFunction("ChatRoomSyncItem", 0, (args, next) => {
@@ -354,6 +355,6 @@
 
     window.__chaosAuraConfig = config;
     window.__chaosAuraSnapshot = snapshotCurrent;
-    console.log("[ChaosAura] Standalone v1.0.5 loaded.");
+    console.log("[ChaosAura] Standalone v1.0.6 loaded.");
     sendLocal(getCommandSummary());
 })();
