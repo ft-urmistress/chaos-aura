@@ -26,13 +26,32 @@
         lastPose = Array.isArray(Player.ActivePose) ? [...Player.ActivePose] : [];
     }
 
-    function sendAction(text) {
+    function sendLocal(text) {
+        if (typeof ChatRoomSendLocal === "function") {
+            ChatRoomSendLocal(text);
+        } else {
+            console.log("[ChaosAura]", text);
+        }
+    }
+
+    function sendRoomEmote(text) {
         if (typeof ServerSend === "function") {
             ServerSend("ChatRoomChat", {
                 Content: text,
-                Type: "Action"
+                Type: "Emote"
             });
         }
+    }
+
+    function getCommandSummary() {
+        return [
+            "[ChaosAura Commands]",
+            "/aura on | off — Enable or disable Chaos Aura",
+            "/aura whitelist add <id> | remove <id> | list — Manage whitelisted MemberNumbers",
+            "/aura retribution [on|off] — Toggle or set restraint retribution",
+            "/aura snapshot — Re-snapshot current appearance & pose",
+            "/aura help — Show this command list"
+        ].join("\n");
     }
 
     function findTargetCharacter(memberNumber) {
@@ -119,9 +138,8 @@
         const attackerName = attacker ? getNicknameSafe(attacker) : `Player ${attackerMemberNumber ?? "Unknown"}`;
         const playerName = getNicknameSafe(Player);
 
-        sendAction(`${attackerName} tried to touch ${playerName}, but ${playerName} was protected by some kind of dark aura`);
+        sendRoomEmote(`${attackerName} tried to touch ${playerName}, but ${playerName} was protected by some kind of dark aura`);
 
-        // Retribution: return added items (except ItemHandheld) to attacker if allowed
         const retriableItems = addedItems.filter((item) => item.Group !== "ItemHandheld");
         const canRetribute =
             config.retribution &&
@@ -131,7 +149,7 @@
             (typeof ServerChatRoomGetAllowItem !== "function" || ServerChatRoomGetAllowItem(Player, attacker));
 
         if (canRetribute && typeof ServerAppearanceBundle === "function") {
-            sendAction(`Retribution: Used restraints are returned to ${attackerName}`);
+            sendRoomEmote(`Retribution: Used restraints are returned to ${attackerName}`);
             ServerSend("ChatRoomCharacterUpdate", {
                 ID: attacker.OnlineID ?? attacker.AccountName?.replace("Online-", ""),
                 ActivePose: attacker.ActivePose,
@@ -156,11 +174,99 @@
         }, Math.max(0, Number(config.delayMs) || 0));
     }
 
+    function handleAuraCommand(rawArgs = "") {
+        const parts = rawArgs.trim().split(/\s+/).filter(Boolean);
+        const sub = (parts[0] || "help").toLowerCase();
+
+        if (sub === "help") {
+            sendLocal(getCommandSummary());
+            return;
+        }
+
+        if (sub === "on") {
+            config.enabled = true;
+            snapshotCurrent();
+            sendLocal("[ChaosAura] Enabled and re-snapshotted current appearance.");
+            return;
+        }
+
+        if (sub === "off") {
+            config.enabled = false;
+            sendLocal("[ChaosAura] Disabled.");
+            return;
+        }
+
+        if (sub === "snapshot") {
+            snapshotCurrent();
+            sendLocal("[ChaosAura] Snapshot updated to current appearance and pose.");
+            return;
+        }
+
+        if (sub === "retribution") {
+            const mode = (parts[1] || "").toLowerCase();
+            if (mode === "on") {
+                config.retribution = true;
+            } else if (mode === "off") {
+                config.retribution = false;
+            } else {
+                config.retribution = !config.retribution;
+            }
+            sendLocal(`[ChaosAura] Retribution is now ${config.retribution ? "ON" : "OFF"}.`);
+            return;
+        }
+
+        if (sub === "whitelist") {
+            const action = (parts[1] || "list").toLowerCase();
+            const id = Number(parts[2]);
+
+            if (action === "list") {
+                sendLocal(`[ChaosAura] Whitelist: ${config.whiteList.length ? config.whiteList.join(", ") : "(empty)"}`);
+                return;
+            }
+
+            if (!Number.isInteger(id) || id <= 0) {
+                sendLocal("[ChaosAura] Please provide a valid numeric MemberNumber, e.g. /aura whitelist add 12345");
+                return;
+            }
+
+            if (action === "add") {
+                if (!config.whiteList.includes(id)) {
+                    config.whiteList.push(id);
+                }
+                sendLocal(`[ChaosAura] Added ${id} to whitelist.`);
+                return;
+            }
+
+            if (action === "remove") {
+                config.whiteList = config.whiteList.filter((x) => x !== id);
+                sendLocal(`[ChaosAura] Removed ${id} from whitelist.`);
+                return;
+            }
+        }
+
+        sendLocal(getCommandSummary());
+    }
+
+    function registerCommands() {
+        if (Array.isArray(window.CommandList)) {
+            const exists = window.CommandList.some((cmd) => cmd && cmd.Tag === "aura");
+            if (!exists) {
+                window.CommandList.push({
+                    Tag: "aura",
+                    Description: "Control Chaos Aura settings (/aura help)",
+                    Action: (args) => handleAuraCommand(args)
+                });
+            }
+        }
+    }
+
+    registerCommands();
+
     if (typeof bcModSDK !== "undefined" && typeof bcModSDK.registerMod === "function") {
         const mod = bcModSDK.registerMod({
             name: "ChaosAuraStandalone",
             fullName: "Chaos Aura Standalone",
-            version: "1.0.3"
+            version: "1.0.4"
         });
 
         mod.hookFunction("ChatRoomSyncItem", 0, (args, next) => {
@@ -193,6 +299,16 @@
             }
             return ret;
         });
+
+        mod.hookFunction("CommandParse", 0, (args, next) => {
+            const input = typeof args?.[0] === "string" ? args[0].trim() : "";
+            if (/^\/aura(?:\s|$)/i.test(input)) {
+                const rest = input.replace(/^\/aura/i, "");
+                handleAuraCommand(rest);
+                return;
+            }
+            return next(args);
+        });
     } else {
         const origSyncItem = window.ChatRoomSyncItem;
         if (typeof origSyncItem === "function") {
@@ -221,9 +337,23 @@
                 return ret;
             };
         }
+
+        const origCommandParse = window.CommandParse;
+        if (typeof origCommandParse === "function") {
+            window.CommandParse = function (...args) {
+                const input = typeof args?.[0] === "string" ? args[0].trim() : "";
+                if (/^\/aura(?:\s|$)/i.test(input)) {
+                    const rest = input.replace(/^\/aura/i, "");
+                    handleAuraCommand(rest);
+                    return;
+                }
+                return origCommandParse.apply(this, args);
+            };
+        }
     }
 
     window.__chaosAuraConfig = config;
     window.__chaosAuraSnapshot = snapshotCurrent;
-    console.log("[ChaosAura] Standalone v1.0.3 loaded.");
+    console.log("[ChaosAura] Standalone v1.0.4 loaded.");
+    sendLocal(getCommandSummary());
 })();
