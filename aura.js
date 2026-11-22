@@ -138,7 +138,7 @@
         const attackerName = attacker ? getNicknameSafe(attacker) : `Player ${attackerMemberNumber ?? "Unknown"}`;
         const playerName = getNicknameSafe(Player);
 
-        sendRoomEmote(`${attackerName} tried to touch ${playerName}, but ${playerName} was protected by some kind of dark aura`);
+        sendRoomEmote(`${attackerName} tried to touch ${playerName}, but ${playerName} was protected by the power of void`);
 
         const retriableItems = addedItems.filter((item) => item.Group !== "ItemHandheld");
         const canRetribute =
